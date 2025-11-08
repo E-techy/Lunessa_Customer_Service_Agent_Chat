@@ -13,6 +13,9 @@ const prisma = new PrismaClient();
 async function handleCustomerSatisfactionData(username, comment, reviewStar, agentId, agentName) {
   try {
     // Validation
+    if(!username ){
+      username= "Anonymous"
+    }
     if (!username || !comment || !reviewStar || !agentId || !agentName) {
       throw new Error('All fields are required.');
     }
