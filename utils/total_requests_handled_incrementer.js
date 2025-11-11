@@ -13,7 +13,7 @@ async function totalRequestsHandledIncrementer(agentId, agentName, modelName) {
     throw new Error("agentId and agentName are required");
   }
 
-  const updated = await prisma.agentRequestsHandledLogs.upsert({
+  const updated = await prisma.AgentRequestsHandledLogs.upsert({
     where: { agentId },
     update: {
       totalRequestsHandled: { increment: 1 },

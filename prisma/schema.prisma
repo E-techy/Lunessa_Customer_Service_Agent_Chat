@@ -103,6 +103,7 @@ model AgentUsageStatistics {
 }
 
 type UsageLog {
+  modelName  String
   tokensUsed Int
   timestamp  DateTime @default(now())
 }

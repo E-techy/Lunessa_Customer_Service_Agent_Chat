@@ -69,7 +69,7 @@ async function chatAgentHandler(agentId, agentName, chatHistory, userInput, agen
 
     // 🧩 Step 7: Increment total handled requests
     try {
-      await totalRequestsHandledIncrementer(agentId, agentName);
+      await totalRequestsHandledIncrementer(agentId, agentName, modelName);
     } catch (counterErr) {
       console.error("⚠️ Failed to increment request count:", counterErr);
     }
