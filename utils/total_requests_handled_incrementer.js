@@ -5,9 +5,10 @@ const prisma = new PrismaClient();
  * Increments total requests handled and logs timestamp for graphing
  * @param {string} agentId - Agent's ID
  * @param {string} agentName - Agent's name (if new record is created)
+ * @param {string} modelName - Agent's model which is being used to handle this request
  * @returns {Promise<object>} Updated logs and total count
  */
-async function totalRequestsHandledIncrementer(agentId, agentName) {
+async function totalRequestsHandledIncrementer(agentId, agentName, modelName) {
   if (!agentId || !agentName) {
     throw new Error("agentId and agentName are required");
   }
@@ -27,7 +28,7 @@ async function totalRequestsHandledIncrementer(agentId, agentName) {
       agentName,
       totalRequestsHandled: 1,
       requestLogs: [
-        { timestamp: new Date() }
+        { modelName: modelName, timestamp: new Date() }
       ]
     }
   });
