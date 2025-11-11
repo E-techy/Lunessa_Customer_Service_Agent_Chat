@@ -1,3 +1,5 @@
+// prisma/schema.prisma
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,6 +8,7 @@ datasource db {
   provider = "mongodb"
   url      = env("DATABASE_URL")
 }
+
 // 1️⃣ Customer Service Agents model
 model CustomerServiceAgents {
   id                        String               @id @default(auto()) @map("_id") @db.ObjectId
@@ -82,26 +85,27 @@ type AgentModification {
   companyHumanServiceNumber String
   companyEmail              String
   companyDescription        String
+  // ⭐ ADDED FIELDS FOR MODIFICATION HISTORY SNAPSHOT ⭐
+  tokenBalances             TokenBalance[]
+  usingModel                UsingModel?
+  defaultModel              DefaultModel?
 }
-
 
 // 2️⃣ Agent Usage Statistics
 model AgentUsageStatistics {
-  id                     String               @id @default(auto()) @map("_id") @db.ObjectId
-  agentId                String               @unique
-  agentName              String
-  usageLogs              UsageLog[]
-  satisfactionRate       Int                  @default(0) // Current satisfaction rate in percentage
-  satisfactionRateLogs   SatisfactionRateLog[] // History of review stars
-  customerReviews        CustomerReview[]
+  id                   String                 @id @default(auto()) @map("_id") @db.ObjectId
+  agentId              String                 @unique
+  agentName            String
+  usageLogs            UsageLog[]
+  satisfactionRate     Int                    @default(0) // Current satisfaction rate in percentage
+  satisfactionRateLogs SatisfactionRateLog[]  // History of review stars
+  customerReviews      CustomerReview[]
 }
- 
+
 type UsageLog {
-  modelName  String
   tokensUsed Int
   timestamp  DateTime @default(now())
 }
-
 
 type SatisfactionRateLog {
   reviewStar Int
@@ -111,15 +115,15 @@ type SatisfactionRateLog {
 type CustomerReview {
   username   String
   comment    String
-  reviewStar Int      // Star rating 1–5
+  reviewStar Int
   timestamp  DateTime @default(now())
 }
 
 model AgentRequestsHandledLogs {
-  id                   String               @id @default(auto()) @map("_id") @db.ObjectId
-  agentId              String               @unique
+  id                   String              @id @default(auto()) @map("_id") @db.ObjectId
+  agentId              String              @unique
   agentName            String
-  totalRequestsHandled Int                  @default(0)
+  totalRequestsHandled Int                 @default(0)
   requestLogs          RequestHandledLog[]
 }
 
@@ -127,6 +131,17 @@ type RequestHandledLog {
   timestamp DateTime @default(now())
 }
 
+model CompanyAgentsRegistered {
+  id          String        @id @default(auto()) @map("_id") @db.ObjectId
+  username    String        @unique   // ✅ Now unique
+  totalAgents Int           @default(0)
+  agents      AgentRecord[]
+}
+
+type AgentRecord {
+  agentId   String
+  agentName String
+}
 
 /// AI models, pricing data
 model AIModel {
@@ -142,4 +157,11 @@ model AIModel {
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model DefaultModelNames {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  modelName     DefaultModel?
+  // New field to store the default number of tokens for new agents
+  defaultTokens Int      @default(1000000)
 }
