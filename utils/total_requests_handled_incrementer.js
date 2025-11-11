@@ -19,6 +19,7 @@ async function totalRequestsHandledIncrementer(agentId, agentName, modelName) {
       totalRequestsHandled: { increment: 1 },
       requestLogs: {
         push: {
+          modelName: modelName,
           timestamp: new Date()
         }
       }
