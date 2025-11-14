@@ -10,6 +10,23 @@ document.addEventListener("DOMContentLoaded", () => {
   // --- Global Trackers ---
   window.activeChatId = null;   // current chatId in use
   window.isNewChat = true;      // flag to decide create/update
+  window.currentAgentId = null; // current agent ID from URL
+  window.currentAgentName = null; // current agent name from URL
+
+  // --- Extract Agent Info from URL ---
+  function getAgentInfoFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const agentId = urlParams.get('agentId');
+    const agentName = urlParams.get('agentName');
+    return { agentId, agentName: agentName ? decodeURIComponent(agentName) : 'Unknown Agent' };
+  }
+
+  // Initialize agent info on page load
+  const agentInfo = getAgentInfoFromURL();
+  window.currentAgentId = agentInfo.agentId;
+  window.currentAgentName = agentInfo.agentName;
+
+  console.log(`🤖 Current Agent: ${window.currentAgentName} (ID: ${window.currentAgentId})`);
 
   // --- Helpers ---
   function generateChatId() {
@@ -26,96 +43,136 @@ document.addEventListener("DOMContentLoaded", () => {
       .filter(m => m.content);
   }
 
-  function getPreviousChats() {
-    return JSON.parse(localStorage.getItem("previousChats") || "[]");
+  // --- New Structure: Get all agents data ---
+  function getAllAgentsData() {
+    return JSON.parse(localStorage.getItem("agentChatsData") || "{}");
   }
 
-  function savePreviousChats(chats) {
-    localStorage.setItem("previousChats", JSON.stringify(chats));
+  // --- Save all agents data ---
+  function saveAllAgentsData(data) {
+    localStorage.setItem("agentChatsData", JSON.stringify(data));
   }
 
+  // --- Get current agent's chats ---
+  function getCurrentAgentChats() {
+    if (!window.currentAgentId) return [];
+    const allData = getAllAgentsData();
+    return allData[window.currentAgentId]?.chats || [];
+  }
+
+  // --- Save current agent's chats ---
+  function saveCurrentAgentChats(chats) {
+    if (!window.currentAgentId) return;
+    
+    const allData = getAllAgentsData();
+    
+    if (!allData[window.currentAgentId]) {
+      allData[window.currentAgentId] = {
+        agentId: window.currentAgentId,
+        agentName: window.currentAgentName,
+        chats: []
+      };
+    }
+    
+    allData[window.currentAgentId].chats = chats;
+    saveAllAgentsData(allData);
+  }
 
   // --- Save Current Chat Function ---
-async function saveCurrentChat() {
-  const chatHistory = getChatHistory();
-  if (!chatHistory.length) return;
-
-  let previousChats = getPreviousChats();
-
-  if (window.isNewChat) {
-    // 💡 Generate the unique ID on the client, as the server doesn't provide it
-    const chatId = generateChatId(); 
-    let chatTitle = `Chat-${Date.now()}`; // Default fallback title
-
-    try {
-      // Call the chat title generator API
-      const response = await fetch("http://localhost:3001/chat_title_generator", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: chatHistory }),
-      });
-
-      const result = await response.json();
-
-      // Check success and extract title directly from the response root
-      if (result?.success && result?.chatTitle) { // <--- FIX 1: Removed '.data'
-        chatTitle = result.chatTitle;
-        console.log(`✅ Received title from server: ${chatTitle}`);
-      } else {
-        console.warn("⚠️ Chat title generation failed, using fallback title.", result?.error);
-      }
-      
-      const newChat = {
-        chatId, // <--- FIX 2: Use client-generated ID
-        title: chatTitle, // Use generated or fallback title
-        history: chatHistory,
-      };
-
-      previousChats.push(newChat);
-      savePreviousChats(previousChats);
-      window.activeChatId = chatId;
-      window.isNewChat = false;
-
-      console.log("✅ Saved new chat:", newChat);
-      renderConversationList();
-
-    } catch (error) {
-      console.error("❌ Error saving new chat:", error);
-
-      // Fallback: save with the already generated chat ID and fallback title
-      const newChat = {
-        chatId, // Use the ID generated at the start
-        title: chatTitle, // Use the default fallback title
-        history: chatHistory,
-      };
-      previousChats.push(newChat);
-      savePreviousChats(previousChats);
-      window.activeChatId = chatId;
-      window.isNewChat = false;
-
-      console.log("⚠️ Saved new chat with fallback ID/title due to network error:", newChat);
-      renderConversationList();
+  async function saveCurrentChat() {
+    if (!window.currentAgentId) {
+      console.warn("⚠️ No agent ID found. Cannot save chat.");
+      return;
     }
 
-  } else {
-    // ✅ Update existing chat
-    const chatIndex = previousChats.findIndex(c => c.chatId === window.activeChatId);
-    if (chatIndex !== -1) {
-      previousChats[chatIndex].history = chatHistory;
-      savePreviousChats(previousChats);
-      console.log(`🔄 Updated existing chat: ${window.activeChatId}`);
-      renderConversationList();
+    const chatHistory = getChatHistory();
+    if (!chatHistory.length) return;
+
+    let agentChats = getCurrentAgentChats();
+
+    if (window.isNewChat) {
+      // 💡 Generate the unique ID on the client
+      const chatId = generateChatId();
+      window.activeChatId = chatId; // Set immediately to prevent race conditions
+      window.isNewChat = false; // Mark as existing chat immediately
+      
+      let chatTitle = `Chat-${Date.now()}`; // Default fallback title
+
+      try {
+        // Call the chat title generator API
+        const response = await fetch("http://localhost:3001/chat_title_generator", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: chatHistory }),
+        });
+
+        const result = await response.json();
+
+        // Check success and extract title directly from the response root
+        if (result?.success && result?.chatTitle) {
+          chatTitle = result.chatTitle;
+          console.log(`✅ Received title from server: ${chatTitle}`);
+        } else {
+          console.warn("⚠️ Chat title generation failed, using fallback title.", result?.error);
+        }
+        
+        const newChat = {
+          chatId,
+          title: chatTitle,
+          history: chatHistory,
+          timestamp: Date.now()
+        };
+
+        agentChats.push(newChat);
+        saveCurrentAgentChats(agentChats);
+
+        console.log(`✅ Saved new chat for agent ${window.currentAgentId}:`, newChat);
+        renderConversationList();
+
+      } catch (error) {
+        console.error("❌ Error saving new chat:", error);
+
+        // Fallback: save with the already generated chat ID and fallback title
+        const newChat = {
+          chatId,
+          title: chatTitle,
+          history: chatHistory,
+          timestamp: Date.now()
+        };
+        agentChats.push(newChat);
+        saveCurrentAgentChats(agentChats);
+
+        console.log("⚠️ Saved new chat with fallback ID/title due to network error:", newChat);
+        renderConversationList();
+      }
+
+    } else {
+      // ✅ Update existing chat
+      const chatIndex = agentChats.findIndex(c => c.chatId === window.activeChatId);
+      if (chatIndex !== -1) {
+        agentChats[chatIndex].history = chatHistory;
+        agentChats[chatIndex].timestamp = Date.now(); // Update timestamp
+        saveCurrentAgentChats(agentChats);
+        console.log(`🔄 Updated existing chat: ${window.activeChatId}`);
+        renderConversationList();
+      }
     }
   }
-}
-
 
   // --- Sidebar UI ---
   function renderConversationList() {
-    const chats = getPreviousChats();
+    const chats = getCurrentAgentChats();
     conversationsList.innerHTML = "";
 
-    chats.forEach(chat => {
+    if (!chats.length) {
+      conversationsList.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">No conversations yet</div>';
+      return;
+    }
+
+    // Sort chats by timestamp (newest first)
+    const sortedChats = [...chats].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    sortedChats.forEach(chat => {
       const lastMsg = chat.history.length
         ? chat.history[chat.history.length - 1].content
         : "No messages";
@@ -127,7 +184,7 @@ async function saveCurrentChat() {
       item.innerHTML = `
         <div class="conversation-preview">
           <div class="conversation-title">${chat.title}</div>
-          <div class="conversation-snippet">${lastMsg}</div>
+          <div class="conversation-snippet">${lastMsg.substring(0, 60)}${lastMsg.length > 60 ? '...' : ''}</div>
         </div>
       `;
 
@@ -163,7 +220,7 @@ async function saveCurrentChat() {
 
   // --- Public method to load a chat by id ---
   window.loadChatById = function (chatId) {
-    const chats = getPreviousChats();
+    const chats = getCurrentAgentChats();
     const chat = chats.find(c => c.chatId === chatId);
 
     if (!chat) {
@@ -201,12 +258,32 @@ async function saveCurrentChat() {
 
   // --- Handle New Chat ---
   newChatBtn.addEventListener("click", () => {
-    // ✅ Save current chat before starting new one
-    saveCurrentChat();
+    // ✅ IMPORTANT: Reset flags BEFORE saving to prevent update during save
+    const previousChatId = window.activeChatId;
+    const previousIsNewChat = window.isNewChat;
     
-    // ✅ Reset for new chat
+    // Set new chat flags immediately
     window.isNewChat = true;
     window.activeChatId = null;
+    
+    // ✅ Save previous chat if there was one
+    if (previousChatId && !previousIsNewChat) {
+      // Temporarily restore previous state to save correctly
+      window.activeChatId = previousChatId;
+      window.isNewChat = false;
+      saveCurrentChat();
+      // Reset again after save
+      window.activeChatId = null;
+      window.isNewChat = true;
+    } else if (previousIsNewChat && messagesContainer.children.length > 0) {
+      // If it was a new chat with messages, save it
+      window.isNewChat = false;
+      window.activeChatId = previousChatId || generateChatId();
+      saveCurrentChat();
+      // Reset for the actual new chat
+      window.activeChatId = null;
+      window.isNewChat = true;
+    }
     
     // ✅ Clear UI
     messagesContainer.innerHTML = "";
@@ -236,6 +313,32 @@ async function saveCurrentChat() {
 
   sidebarOverlay.addEventListener("click", () => {
     if (sidebar.classList.contains("visible")) collapseSidebar();
+  });
+
+  // --- Load chats for current agent on page load ---
+  renderConversationList();
+
+  // --- Watch for URL changes (for SPA navigation) ---
+  window.addEventListener('popstate', () => {
+    const newAgentInfo = getAgentInfoFromURL();
+    if (newAgentInfo.agentId !== window.currentAgentId) {
+      // Save current chat before switching agents
+      saveCurrentChat();
+      
+      // Update agent info
+      window.currentAgentId = newAgentInfo.agentId;
+      window.currentAgentName = newAgentInfo.agentName;
+      
+      // Reset chat state
+      window.isNewChat = true;
+      window.activeChatId = null;
+      messagesContainer.innerHTML = "";
+      
+      // Reload conversations for new agent
+      renderConversationList();
+      
+      console.log(`🔄 Switched to agent: ${window.currentAgentName} (ID: ${window.currentAgentId})`);
+    }
   });
 });
 

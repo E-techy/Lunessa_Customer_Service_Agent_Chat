@@ -227,10 +227,15 @@ document.addEventListener("DOMContentLoaded", () => {
         fileManager.clearFiles();
       }
       
+      // 7) Auto-save chat after AI response
+      if (typeof window.autoSaveChat === 'function') {
+        window.autoSaveChat();
+      }
+      
     } catch (err) {
       console.error("❌ Network/parse error:", err);
     } finally {
-      // 7) Re-enable input after typing completes (or on error)
+      // 8) Re-enable input after typing completes (or on error)
       setSendingState(false);
     }
   }

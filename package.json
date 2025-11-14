@@ -19,6 +19,6 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "prisma": "^6.17.0"
+    "prisma": "^6.17.1"
   }
 }
